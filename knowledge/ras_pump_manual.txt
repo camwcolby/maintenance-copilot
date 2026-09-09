@@ -16,8 +16,22 @@ Recommended checks:
 4. Check vibration trend against normal baseline.
 5. Verify pump is not operating far from its normal hydraulic range.
 
+SYMPTOM: Cavitation or gravel-like noise.
+Recommended checks:
+1. Compare available NPSH with required NPSH at the current operating point.
+2. Check suction pressure and wet-well level or pump submergence.
+3. Inspect the suction path for restrictions, partially closed valves, debris, or excessive losses.
+4. Check for air ingress, vortexing, or entrained gas.
+5. Inspect the impeller eye for pitting or erosion if an intrusive inspection is justified and can be performed safely.
+
+PUMP CURVE CHECK:
+Compare measured flow and total dynamic head with the pump curve at the actual operating speed. In this prototype, an operating point within 10 percent of expected head is treated as approximately on curve. Review the location relative to best efficiency point and the preferred operating region. A meaningful deviation can indicate hydraulic wear, cavitation, an incorrect speed assumption, changed impeller geometry, instrument error, or data-quality problems.
+
 CAUTION:
 Isolate and lock out equipment before intrusive inspection. Follow facility lockout/tagout procedures and OEM safety guidance.
 
 ESCALATION:
 If bearing temperature exceeds 180 F, vibration exceeds 0.50 in/s, or motor current remains above 120 percent of rated current, remove the unit from service if operational redundancy allows and escalate to maintenance supervision.
+
+DEMO NOTE:
+Pump-curve, NPSH, and condition-assessment values in the prototype are synthetic and are not actual OEM limits or inspection records.
