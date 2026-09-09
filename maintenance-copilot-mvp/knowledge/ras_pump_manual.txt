@@ -1,0 +1,23 @@
+RAS Pump XP-500 Troubleshooting Guide
+
+SYMPTOM: Elevated motor amperage.
+Potential causes include:
+1. Pump obstruction or ragging at the suction or impeller.
+2. Increased discharge head or downstream restriction.
+3. Bearing degradation or inadequate lubrication.
+4. Coupling misalignment.
+5. Impeller damage or excessive mechanical drag.
+
+SYMPTOM: Rattling or abnormal vibration.
+Recommended checks:
+1. Inspect bearings for elevated temperature, noise, or looseness.
+2. Verify coupling alignment and fastener torque.
+3. Inspect suction and impeller for debris.
+4. Check vibration trend against normal baseline.
+5. Verify pump is not operating far from its normal hydraulic range.
+
+CAUTION:
+Isolate and lock out equipment before intrusive inspection. Follow facility lockout/tagout procedures and OEM safety guidance.
+
+ESCALATION:
+If bearing temperature exceeds 180 F, vibration exceeds 0.50 in/s, or motor current remains above 120 percent of rated current, remove the unit from service if operational redundancy allows and escalate to maintenance supervision.

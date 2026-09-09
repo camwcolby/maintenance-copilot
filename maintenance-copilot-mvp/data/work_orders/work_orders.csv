@@ -1,0 +1,7 @@
+work_order_id,asset_id,date,problem,cause,corrective_action,downtime_hours
+WO-00482,RAS-P-003,2025-04-17,"Abnormal vibration and elevated motor amperage","Upper bearing degradation","Replaced upper bearing; aligned coupling; verified lubrication",4.2
+WO-00615,RAS-P-003,2025-08-03,"Intermittent high amps and reduced flow","Partial rag obstruction at suction","Isolated pump; cleared obstruction; inspected impeller",2.1
+WO-00801,RAS-P-003,2026-01-19,"Rattling noise during operation","Loose coupling hardware","Re-torqued coupling; checked alignment",1.4
+WO-00914,RAS-P-003,2026-05-06,"Elevated discharge pressure and motor load","Downstream valve partially closed","Corrected valve position; verified pressure",0.8
+WO-00211,BLW-002,2025-02-10,"High vibration","Coupling misalignment","Realigned motor and blower",5.0
+WO-00743,BLW-002,2025-11-22,"High motor temperature","Restricted inlet filter","Replaced inlet filter",1.2

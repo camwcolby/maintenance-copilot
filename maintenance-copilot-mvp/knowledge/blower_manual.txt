@@ -1,0 +1,7 @@
+Blower AB-900 Troubleshooting Guide
+
+High vibration may indicate coupling misalignment, bearing wear, fouling, or mounting issues.
+
+High motor temperature may result from restricted inlet filters, excessive discharge pressure, lubrication issues, or motor problems.
+
+Before inspection, follow facility lockout/tagout requirements and manufacturer safety procedures.

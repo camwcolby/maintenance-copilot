@@ -1,0 +1,27 @@
+[
+  {
+    "asset_id": "RAS-P-003",
+    "facility": "Riverbend WRF",
+    "process": "Secondary Treatment",
+    "asset_name": "RAS Pump 3",
+    "asset_type": "Centrifugal Pump",
+    "manufacturer": "ExamplePumpCo",
+    "model": "XP-500",
+    "rated_amps": 40,
+    "rated_flow_mgd": 4.5,
+    "criticality": "High",
+    "manual": "knowledge/ras_pump_manual.txt"
+  },
+  {
+    "asset_id": "BLW-002",
+    "facility": "Riverbend WRF",
+    "process": "Aeration",
+    "asset_name": "Blower 2",
+    "asset_type": "Centrifugal Blower",
+    "manufacturer": "ExampleAir",
+    "model": "AB-900",
+    "rated_amps": 120,
+    "criticality": "High",
+    "manual": "knowledge/blower_manual.txt"
+  }
+]
