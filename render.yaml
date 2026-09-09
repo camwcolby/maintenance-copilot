@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: maintenance-copilot
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: OPENAI_API_KEY
+        sync: false
