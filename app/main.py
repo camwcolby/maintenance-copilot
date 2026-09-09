@@ -42,13 +42,15 @@ with left:
     default_q = "The pump is rattling and motor amps keep increasing. What should I check?"
     question = st.text_area("Question", value=default_q, height=105)
 
-    if st.button("Investigate", type="primary", use_container_width=True):
+    if st.button("Investigate", type="primary", width="stretch"):
         with st.spinner("Investigating asset condition..."):
             result = run_copilot(asset_id, question, prefer_llm=use_ai)
 
         st.caption(f"Response engine: {result.get('provider', 'Maintenance Copilot')}")
         if result.get("llm_error"):
-            st.warning("AI synthesis was unavailable, so the deterministic evidence engine answered instead.")
+            category = result.get("llm_error_category", "AI request")
+            detail = result.get("llm_error_detail", "See Render logs for the server-side exception.")
+            st.warning(f"AI synthesis was unavailable ({category}). {detail} The deterministic evidence engine answered instead.")
 
         st.markdown("### Investigation path")
         for tool_result in result["trace"]:
@@ -66,7 +68,7 @@ with left:
             causes_df = pd.DataFrame(result["ranked_causes"]).rename(
                 columns={"cause": "Failure mode", "score": "Evidence score"}
             )
-            st.dataframe(causes_df, hide_index=True, use_container_width=True)
+            st.dataframe(causes_df, hide_index=True, width="stretch")
             st.caption("This ranking remains available as a transparent safety rail even when AI synthesis is enabled.")
 
         with st.expander("Evidence: equipment guidance"):
@@ -80,7 +82,7 @@ with left:
 
         with st.expander("Evidence: similar work orders"):
             if result["work_order_hits"]:
-                st.dataframe(pd.DataFrame(result["work_order_hits"]), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(result["work_order_hits"]), hide_index=True, width="stretch")
             else:
                 st.info("No similar work orders found.")
 
@@ -99,14 +101,14 @@ with right:
     m2.metric("Bearing temp", f"{latest['bearing_temp_f']:.0f} °F")
     m3.metric("Vibration", f"{latest['vibration_ips']:.2f} in/s")
 
-    st.line_chart(scada.set_index("timestamp")[["motor_amps", "bearing_temp_f"]], use_container_width=True)
-    st.line_chart(scada.set_index("timestamp")[["vibration_ips"]], use_container_width=True)
+    st.line_chart(scada.set_index("timestamp")[["motor_amps", "bearing_temp_f"]], width="stretch")
+    st.line_chart(scada.set_index("timestamp")[["vibration_ips"]], width="stretch")
 
     st.subheader("Maintenance history")
     st.dataframe(
         work_orders[["work_order_id", "date", "problem", "cause", "corrective_action"]],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     if "source" in work_orders.columns:
         st.caption("Data source: " + ", ".join(sorted(work_orders["source"].dropna().astype(str).unique())))
