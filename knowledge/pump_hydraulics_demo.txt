@@ -1,0 +1,7 @@
+Pump hydraulics demo guidance
+
+Cavitation can occur when pressure at the pump inlet falls low enough for vapor bubbles to form and collapse inside the pump. Investigate suction pressure, wet-well submergence, suction restrictions, air ingress, flow instability, vibration, and the margin between available and required net positive suction head (NPSH). A small or negative NPSH margin is evidence of cavitation risk.
+
+Pump-curve assessment should compare the measured operating point, flow and total dynamic head (TDH), against the speed-adjusted pump curve. The preferred operating region is represented in this prototype as 70 to 120 percent of best-efficiency-point (BEP) flow. A measured head more than 10 percent away from the expected curve is flagged for investigation. Potential causes include wear, cavitation, incorrect speed, instrument error, changed impeller diameter, or data-quality problems.
+
+This file contains synthetic prototype guidance and must not be treated as actual OEM documentation.
