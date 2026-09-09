@@ -8,6 +8,8 @@ try:
     from .tools import (
         ToolResult,
         get_asset_context,
+        get_condition_assessment,
+        get_pump_hydraulics,
         get_scada_trend,
         search_asset_work_orders,
         search_manuals,
@@ -17,6 +19,8 @@ except ImportError:
     from tools import (
         ToolResult,
         get_asset_context,
+        get_condition_assessment,
+        get_pump_hydraulics,
         get_scada_trend,
         search_asset_work_orders,
         search_manuals,
@@ -37,12 +41,7 @@ def _jsonable(value: Any) -> Any:
         except TypeError:
             return value.to_dict()
     if isinstance(value, ToolResult):
-        return {
-            "tool": value.tool,
-            "label": value.label,
-            "status": value.status,
-            "data": _jsonable(value.data),
-        }
+        return {"tool": value.tool, "label": value.label, "status": value.status, "data": _jsonable(value.data)}
     if isinstance(value, dict):
         return {k: _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -66,34 +65,32 @@ def _tool_definitions():
         {
             "type": "function",
             "name": "get_scada_trend",
-            "description": "Get the recent operating trend for the selected asset, including motor current, flow, discharge pressure, temperature, and vibration when available.",
+            "description": "Get recent operating data including motor current, flow, suction/discharge pressure, speed, wet-well level, temperature, and vibration when available.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "type": "function",
+            "name": "get_condition_assessment",
+            "description": "Get the latest asset condition assessment, including condition score, visual findings, alignment, seal leakage, insulation resistance, oil condition, remaining life, risk, and recommended action.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+        {
+            "type": "function",
+            "name": "get_pump_hydraulics",
+            "description": "Evaluate the selected centrifugal pump against its pump curve and NPSH data. Returns actual and expected TDH, curve deviation, BEP position, preferred operating region, NPSHa/NPSHr margin, and cavitation evidence.",
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
         {
             "type": "function",
             "name": "search_manuals",
             "description": "Search equipment/OEM troubleshooting guidance for the selected asset.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Troubleshooting symptoms or failure mode to search for."}
-                },
-                "required": ["query"],
-                "additionalProperties": False,
-            },
+            "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Troubleshooting symptoms or failure mode to search for."}}, "required": ["query"], "additionalProperties": False},
         },
         {
             "type": "function",
             "name": "search_work_orders",
             "description": "Search prior maintenance work orders for similar symptoms, causes, and corrective actions on the selected asset.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Symptoms or suspected failure mode to search for."}
-                },
-                "required": ["query"],
-                "additionalProperties": False,
-            },
+            "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "Symptoms or suspected failure mode to search for."}}, "required": ["query"], "additionalProperties": False},
         },
     ]
 
@@ -103,6 +100,10 @@ def _execute_tool(name: str, args: dict, asset_id: str) -> ToolResult:
         return get_asset_context(asset_id)
     if name == "get_scada_trend":
         return get_scada_trend(asset_id)
+    if name == "get_condition_assessment":
+        return get_condition_assessment(asset_id)
+    if name == "get_pump_hydraulics":
+        return get_pump_hydraulics(asset_id)
     if name == "search_manuals":
         return search_manuals(asset_id, args.get("query", "maintenance troubleshooting"), top_k=4)
     if name == "search_work_orders":
@@ -111,11 +112,9 @@ def _execute_tool(name: str, args: dict, asset_id: str) -> ToolResult:
 
 
 def _classify_llm_error(exc: Exception) -> tuple[str, str]:
-    """Return a safe UI category and concise detail without exposing credentials."""
     name = exc.__class__.__name__
     text = str(exc).lower()
     status = getattr(exc, "status_code", None)
-
     if status == 401 or "authentication" in text or "invalid api key" in text:
         return "authentication", "OpenAI rejected the API credentials. Check the Render OPENAI_API_KEY value."
     if status == 429 or "rate limit" in text or "quota" in text or "insufficient_quota" in text:
@@ -132,11 +131,6 @@ def _classify_llm_error(exc: Exception) -> tuple[str, str]:
 
 
 def run_llm_investigation(asset_id: str, question: str, model: str | None = None, max_rounds: int = 6):
-    """Let an OpenAI model choose maintenance evidence tools, then answer from the evidence.
-
-    The deterministic investigation still runs in parallel as a safety rail and provides
-    ranked failure modes and structured findings used by the UI.
-    """
     if not llm_available():
         result = run_investigation(asset_id, question)
         result["provider"] = "Deterministic fallback"
@@ -149,56 +143,33 @@ def run_llm_investigation(asset_id: str, question: str, model: str | None = None
     client = OpenAI()
     tools = _tool_definitions()
     trace: list[ToolResult] = []
-    tool_cache: dict[str, Any] = {}
 
     instructions = """You are a maintenance troubleshooting copilot for water and wastewater facilities.
-Use the available tools to investigate the selected asset before diagnosing it. Prefer evidence from actual
-operating trends, equipment guidance, and prior work orders. Do not invent readings, work orders, OEM limits,
-or maintenance history. Distinguish observed evidence from plausible causes. Include a concise likely-cause
-assessment, confidence, evidence, and a safe troubleshooting sequence. Never instruct a user to bypass lockout/
-tagout, guards, interlocks, permits, confined-space requirements, or OEM/site safety procedures. You are decision
-support, not an autonomous controller, and you cannot issue equipment commands."""
+Use the available tools to investigate the selected asset before diagnosing it. Prefer measured operating trends,
+pump hydraulics, condition assessment findings, equipment guidance, and maintenance history. For cavitation questions,
+inspect suction pressure, wet-well level, NPSHa versus NPSHr, vibration, flow stability, and condition findings. For
+pump-curve questions, compare measured flow and TDH to the speed-adjusted curve and state whether the point is within
+10 percent of expected head and within the preferred operating region around BEP. Do not invent readings, work orders,
+curve points, limits, or maintenance history. Clearly identify demo/synthetic evidence when the data says it is dummy.
+Never instruct a user to bypass lockout/tagout, guards, interlocks, permits, confined-space requirements, or OEM/site
+safety procedures. You provide decision support and cannot issue equipment commands."""
 
-    input_items: list[Any] = [
-        {
-            "role": "user",
-            "content": f"Selected asset ID: {asset_id}\nMaintenance question: {question}\nInvestigate before answering.",
-        }
-    ]
-
+    input_items: list[Any] = [{"role": "user", "content": f"Selected asset ID: {asset_id}\nMaintenance question: {question}\nInvestigate before answering."}]
     response = None
     for _ in range(max_rounds):
-        response = client.responses.create(
-            model=model,
-            instructions=instructions,
-            input=input_items,
-            tools=tools,
-        )
+        response = client.responses.create(model=model, instructions=instructions, input=input_items, tools=tools)
         function_calls = [item for item in response.output if getattr(item, "type", None) == "function_call"]
         if not function_calls:
             break
-
         input_items.extend([item.to_dict() for item in response.output])
         for call in function_calls:
             args = json.loads(call.arguments or "{}")
             tool_result = _execute_tool(call.name, args, asset_id)
             trace.append(tool_result)
-            tool_cache[call.name] = tool_result.data
-            input_items.append(
-                {
-                    "type": "function_call_output",
-                    "call_id": call.call_id,
-                    "output": json.dumps(_jsonable(tool_result.data), default=str),
-                }
-            )
+            input_items.append({"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(_jsonable(tool_result.data), default=str)})
 
     deterministic = run_investigation(asset_id, question)
-    answer = (response.output_text if response is not None else "").strip()
-    if not answer:
-        answer = deterministic["answer"]
-
-    # If the model skipped an evidence channel, the deterministic result keeps the UI complete
-    # without pretending the LLM inspected something it did not.
+    answer = (response.output_text if response is not None else "").strip() or deterministic["answer"]
     result = deterministic
     result["answer"] = answer
     result["trace"] = trace or deterministic["trace"]
@@ -215,14 +186,7 @@ def run_copilot(asset_id: str, question: str, prefer_llm: bool = True):
             return run_llm_investigation(asset_id, question, model=model)
         except Exception as exc:
             category, detail = _classify_llm_error(exc)
-            logger.exception(
-                "OpenAI investigation failed | asset_id=%s | model=%s | category=%s | exception_type=%s | error=%s",
-                asset_id,
-                model,
-                category,
-                exc.__class__.__name__,
-                str(exc),
-            )
+            logger.exception("OpenAI investigation failed | asset_id=%s | model=%s | category=%s | exception_type=%s | error=%s", asset_id, model, category, exc.__class__.__name__, str(exc))
             result = run_investigation(asset_id, question)
             result["provider"] = "Deterministic fallback"
             result["llm_used"] = False
