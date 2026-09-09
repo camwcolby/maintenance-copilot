@@ -1,22 +1,28 @@
 import pandas as pd
 import streamlit as st
 
-from agent import run_investigation
 from data_service import load_assets, load_asset, load_recent_scada, load_work_orders
+from llm_agent import llm_available, run_copilot
 
-st.set_page_config(page_title="Maintenance Copilot", layout="wide")
+st.set_page_config(page_title="Maintenance Copilot", page_icon="🔧", layout="wide")
 
-st.title("Maintenance Copilot")
-st.caption(
-    "Asset-aware troubleshooting using operating data, equipment guidance, and maintenance history."
-)
+st.title("🔧 Maintenance Copilot")
+st.caption("Asset-aware troubleshooting using operating data, equipment guidance, maintenance history, and optional AI tool use.")
 
 assets = load_assets()
-asset_labels = {f"{a['asset_name']} | {a['facility']}": a["asset_id"] for a in assets}
-
+facilities = sorted({a["facility"] for a in assets})
+selected_facility = st.sidebar.selectbox("Facility", facilities)
+facility_assets = [a for a in assets if a["facility"] == selected_facility]
+asset_labels = {f"{a['asset_name']} | {a['asset_id']}": a["asset_id"] for a in facility_assets}
 selected_label = st.sidebar.selectbox("Asset", list(asset_labels.keys()))
 asset_id = asset_labels[selected_label]
 asset = load_asset(asset_id)
+
+use_ai = st.sidebar.toggle("Use AI agent", value=True, disabled=not llm_available())
+if llm_available():
+    st.sidebar.success("OpenAI API key detected")
+else:
+    st.sidebar.info("AI key not configured. Running deterministic evidence engine.")
 
 st.sidebar.markdown("### Asset context")
 st.sidebar.write(f"**ID:** {asset['asset_id']}")
@@ -24,20 +30,25 @@ st.sidebar.write(f"**Process:** {asset['process']}")
 st.sidebar.write(f"**Type:** {asset['asset_type']}")
 st.sidebar.write(f"**Model:** {asset['manufacturer']} {asset['model']}")
 st.sidebar.write(f"**Criticality:** {asset['criticality']}")
+st.sidebar.write(f"**Demo scenario:** {asset.get('scenario', 'n/a').title()}")
 
 scada = load_recent_scada(asset_id)
 work_orders = load_work_orders(asset_id)
 
-left, right = st.columns([1.2, 1])
+left, right = st.columns([1.25, 1])
 
 with left:
     st.subheader("Ask Maintenance Copilot")
     default_q = "The pump is rattling and motor amps keep increasing. What should I check?"
-    question = st.text_area("Question", value=default_q, height=100)
+    question = st.text_area("Question", value=default_q, height=105)
 
-    if st.button("Investigate", type="primary"):
+    if st.button("Investigate", type="primary", use_container_width=True):
         with st.spinner("Investigating asset condition..."):
-            result = run_investigation(asset_id, question)
+            result = run_copilot(asset_id, question, prefer_llm=use_ai)
+
+        st.caption(f"Response engine: {result.get('provider', 'Maintenance Copilot')}")
+        if result.get("llm_error"):
+            st.warning("AI synthesis was unavailable, so the deterministic evidence engine answered instead.")
 
         st.markdown("### Investigation path")
         for tool_result in result["trace"]:
@@ -51,10 +62,12 @@ with left:
         st.markdown(result["answer"])
 
         if result["ranked_causes"]:
-            st.markdown("### Ranked failure modes")
-            causes_df = pd.DataFrame(result["ranked_causes"])
-            causes_df = causes_df.rename(columns={"cause": "Failure mode", "score": "Evidence score"})
+            st.markdown("### Deterministic evidence ranking")
+            causes_df = pd.DataFrame(result["ranked_causes"]).rename(
+                columns={"cause": "Failure mode", "score": "Evidence score"}
+            )
             st.dataframe(causes_df, hide_index=True, use_container_width=True)
+            st.caption("This ranking remains available as a transparent safety rail even when AI synthesis is enabled.")
 
         with st.expander("Evidence: equipment guidance"):
             if result["manual_hits"]:
@@ -67,11 +80,7 @@ with left:
 
         with st.expander("Evidence: similar work orders"):
             if result["work_order_hits"]:
-                st.dataframe(
-                    pd.DataFrame(result["work_order_hits"]),
-                    hide_index=True,
-                    use_container_width=True,
-                )
+                st.dataframe(pd.DataFrame(result["work_order_hits"]), hide_index=True, use_container_width=True)
             else:
                 st.info("No similar work orders found.")
 
@@ -84,33 +93,23 @@ with left:
 
 with right:
     st.subheader("Recent operating condition")
-    if not scada.empty:
-        latest = scada.iloc[-1]
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Motor amps", f"{latest['motor_amps']:.1f} A")
-        m2.metric("Bearing temp", f"{latest['bearing_temp_f']:.0f} F")
-        m3.metric("Vibration", f"{latest['vibration_ips']:.2f} in/s")
+    latest = scada.iloc[-1]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Motor amps", f"{latest['motor_amps']:.1f} A")
+    m2.metric("Bearing temp", f"{latest['bearing_temp_f']:.0f} °F")
+    m3.metric("Vibration", f"{latest['vibration_ips']:.2f} in/s")
 
-        st.line_chart(
-            scada.set_index("timestamp")[["motor_amps", "bearing_temp_f"]],
-            use_container_width=True,
-        )
-
-        st.line_chart(
-            scada.set_index("timestamp")[["vibration_ips"]],
-            use_container_width=True,
-        )
-    else:
-        st.info("No SCADA demo data exists for this asset.")
+    st.line_chart(scada.set_index("timestamp")[["motor_amps", "bearing_temp_f"]], use_container_width=True)
+    st.line_chart(scada.set_index("timestamp")[["vibration_ips"]], use_container_width=True)
 
     st.subheader("Maintenance history")
-    if not work_orders.empty:
-        st.dataframe(
-            work_orders[
-                ["work_order_id", "date", "problem", "cause", "corrective_action"]
-            ],
-            hide_index=True,
-            use_container_width=True,
-        )
-    else:
-        st.info("No work-order history found.")
+    st.dataframe(
+        work_orders[["work_order_id", "date", "problem", "cause", "corrective_action"]],
+        hide_index=True,
+        use_container_width=True,
+    )
+    if "source" in work_orders.columns:
+        st.caption("Data source: " + ", ".join(sorted(work_orders["source"].dropna().astype(str).unique())))
+
+st.divider()
+st.caption("Prototype decision support only. No equipment commands are issued. Follow OEM procedures and site safety requirements.")
