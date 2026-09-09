@@ -2,10 +2,24 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    from .data_service import load_asset, load_manual, load_recent_scada, load_work_orders
+    from .data_service import (
+        calculate_pump_hydraulics,
+        load_asset,
+        load_condition_assessment,
+        load_manual,
+        load_recent_scada,
+        load_work_orders,
+    )
     from .retrieval import search_text, search_work_orders
 except ImportError:
-    from data_service import load_asset, load_manual, load_recent_scada, load_work_orders
+    from data_service import (
+        calculate_pump_hydraulics,
+        load_asset,
+        load_condition_assessment,
+        load_manual,
+        load_recent_scada,
+        load_work_orders,
+    )
     from retrieval import search_text, search_work_orders
 
 
@@ -34,6 +48,26 @@ def get_scada_trend(asset_id: str) -> ToolResult:
         label="Analyzed recent operating trend",
         status="complete" if not scada.empty else "no_data",
         data=scada,
+    )
+
+
+def get_condition_assessment(asset_id: str) -> ToolResult:
+    assessment = load_condition_assessment(asset_id)
+    return ToolResult(
+        tool="get_condition_assessment",
+        label="Reviewed latest condition assessment",
+        status="complete" if assessment else "no_data",
+        data=assessment,
+    )
+
+
+def get_pump_hydraulics(asset_id: str) -> ToolResult:
+    hydraulics = calculate_pump_hydraulics(asset_id)
+    return ToolResult(
+        tool="get_pump_hydraulics",
+        label="Checked pump curve and suction hydraulics",
+        status="complete" if hydraulics else "no_data",
+        data=hydraulics,
     )
 
 
