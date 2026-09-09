@@ -166,7 +166,7 @@ def _synthetic_scada(asset):
         vibration += 0.08 * x
     elif scenario == "cavitation":
         flow -= rated_flow * 0.18 * x
-        suction_pressure -= 6.0 * x
+        suction_pressure -= 8.0 * x
         vibration += 0.42 * x
         amps += rated_amps * 0.08 * x + rng.normal(0, rated_amps * 0.02, n)
 
