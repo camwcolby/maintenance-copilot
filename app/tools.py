@@ -1,8 +1,12 @@
 from dataclasses import dataclass
 from typing import Any
 
-from data_service import load_asset, load_manual, load_recent_scada, load_work_orders
-from retrieval import search_text, search_work_orders
+try:
+    from .data_service import load_asset, load_manual, load_recent_scada, load_work_orders
+    from .retrieval import search_text, search_work_orders
+except ImportError:
+    from data_service import load_asset, load_manual, load_recent_scada, load_work_orders
+    from retrieval import search_text, search_work_orders
 
 
 @dataclass
