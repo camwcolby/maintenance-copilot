@@ -1,14 +1,15 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 
-from data_service import load_assets, load_asset, load_work_orders, load_recent_scada, load_manual
-from retrieval import search_text, search_work_orders
-from agent import summarize_scada, build_answer
+from agent import run_investigation
+from data_service import load_assets, load_asset, load_recent_scada, load_work_orders
 
 st.set_page_config(page_title="Maintenance Copilot", layout="wide")
 
 st.title("Maintenance Copilot")
-st.caption("Prototype: asset-aware troubleshooting using operating data, manuals, and maintenance history.")
+st.caption(
+    "Asset-aware troubleshooting using operating data, equipment guidance, and maintenance history."
+)
 
 assets = load_assets()
 asset_labels = {f"{a['asset_name']} | {a['facility']}": a["asset_id"] for a in assets}
@@ -26,7 +27,6 @@ st.sidebar.write(f"**Criticality:** {asset['criticality']}")
 
 scada = load_recent_scada(asset_id)
 work_orders = load_work_orders(asset_id)
-manual = load_manual(asset)
 
 left, right = st.columns([1.2, 1])
 
@@ -36,23 +36,51 @@ with left:
     question = st.text_area("Question", value=default_q, height=100)
 
     if st.button("Investigate", type="primary"):
-        manual_hits = search_text(question, manual, top_k=3)
-        wo_hits = search_work_orders(question, work_orders, top_k=3)
-        summary = summarize_scada(asset, scada)
-        answer = build_answer(question, asset, summary, manual_hits, wo_hits)
+        with st.spinner("Investigating asset condition..."):
+            result = run_investigation(asset_id, question)
 
-        st.markdown(answer)
+        st.markdown("### Investigation path")
+        for tool_result in result["trace"]:
+            if tool_result.status == "complete":
+                st.success(f"✓ {tool_result.label}")
+            elif tool_result.status == "no_data":
+                st.warning(f"△ {tool_result.label}: no recent data available")
+            else:
+                st.info(f"○ {tool_result.label}: no strong match found")
 
-        with st.expander("Retrieved manual evidence"):
-            for hit in manual_hits:
-                st.write(hit["text"])
-                st.caption(f"retrieval score: {hit['score']:.3f}")
+        st.markdown(result["answer"])
 
-        with st.expander("Retrieved work orders"):
-            if wo_hits:
-                st.dataframe(pd.DataFrame(wo_hits), use_container_width=True)
+        if result["ranked_causes"]:
+            st.markdown("### Ranked failure modes")
+            causes_df = pd.DataFrame(result["ranked_causes"])
+            causes_df = causes_df.rename(columns={"cause": "Failure mode", "score": "Evidence score"})
+            st.dataframe(causes_df, hide_index=True, use_container_width=True)
+
+        with st.expander("Evidence: equipment guidance"):
+            if result["manual_hits"]:
+                for i, hit in enumerate(result["manual_hits"], 1):
+                    st.markdown(f"**Manual evidence {i}**")
+                    st.write(hit["text"])
+                    st.caption(f"Retrieval score: {hit['score']:.3f}")
+            else:
+                st.info("No relevant equipment guidance found.")
+
+        with st.expander("Evidence: similar work orders"):
+            if result["work_order_hits"]:
+                st.dataframe(
+                    pd.DataFrame(result["work_order_hits"]),
+                    hide_index=True,
+                    use_container_width=True,
+                )
             else:
                 st.info("No similar work orders found.")
+
+        with st.expander("Evidence: operating findings"):
+            if result["scada_summary"]["findings"]:
+                for finding in result["scada_summary"]["findings"]:
+                    st.write(f"• {finding}")
+            else:
+                st.info("No abnormal operating findings were identified in the available window.")
 
 with right:
     st.subheader("Recent operating condition")
@@ -65,12 +93,12 @@ with right:
 
         st.line_chart(
             scada.set_index("timestamp")[["motor_amps", "bearing_temp_f"]],
-            use_container_width=True
+            use_container_width=True,
         )
 
         st.line_chart(
             scada.set_index("timestamp")[["vibration_ips"]],
-            use_container_width=True
+            use_container_width=True,
         )
     else:
         st.info("No SCADA demo data exists for this asset.")
@@ -78,9 +106,11 @@ with right:
     st.subheader("Maintenance history")
     if not work_orders.empty:
         st.dataframe(
-            work_orders[["work_order_id", "date", "problem", "cause", "corrective_action"]],
+            work_orders[
+                ["work_order_id", "date", "problem", "cause", "corrective_action"]
+            ],
             hide_index=True,
-            use_container_width=True
+            use_container_width=True,
         )
     else:
         st.info("No work-order history found.")
