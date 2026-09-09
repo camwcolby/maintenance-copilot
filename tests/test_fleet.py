@@ -1,5 +1,5 @@
 from app.data_service import load_assets, load_recent_scada, load_work_orders
-from app.llm_agent import run_copilot
+from app.llm_agent import _classify_llm_error, run_copilot
 
 
 def test_demo_fleet_has_multiple_assets_and_scenarios():
@@ -23,3 +23,21 @@ def test_copilot_runs_without_openai_key(monkeypatch):
     assert result["llm_used"] is False
     assert result["answer"]
     assert result["ranked_causes"]
+
+
+def test_openai_error_classifier_identifies_quota():
+    class FakeRateLimitError(Exception):
+        status_code = 429
+
+    category, detail = _classify_llm_error(FakeRateLimitError("insufficient_quota"))
+    assert category == "quota/rate limit"
+    assert "billing" in detail.lower()
+
+
+def test_openai_error_classifier_identifies_authentication():
+    class FakeAuthenticationError(Exception):
+        status_code = 401
+
+    category, detail = _classify_llm_error(FakeAuthenticationError("invalid api key"))
+    assert category == "authentication"
+    assert "OPENAI_API_KEY" in detail
