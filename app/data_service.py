@@ -5,6 +5,11 @@ import json
 import numpy as np
 import pandas as pd
 
+try:
+    from .adapters.cmms_csv import load_real_cmms_work_orders
+except ImportError:
+    from adapters.cmms_csv import load_real_cmms_work_orders
+
 BASE = Path(__file__).resolve().parents[1]
 
 
@@ -77,6 +82,10 @@ def _synthetic_work_orders(asset):
 
 
 def load_work_orders(asset_id):
+    real = load_real_cmms_work_orders(asset_id)
+    if not real.empty:
+        return real
+
     df = pd.read_csv(BASE / "data/work_orders/work_orders.csv")
     existing = df[df["asset_id"] == asset_id].copy()
     if not existing.empty:
@@ -120,7 +129,7 @@ def _synthetic_scada(asset):
     elif scenario == "seal":
         temp += 18 * x
         vibration += 0.08 * x
-    
+
     return pd.DataFrame(
         {
             "timestamp": times,
