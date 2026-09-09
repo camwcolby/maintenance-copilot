@@ -18,6 +18,8 @@ def test_investigation_uses_expected_tools_and_ranks_bearing_issue():
     assert tool_names == [
         "get_asset_context",
         "get_scada_trend",
+        "get_pump_hydraulics",
+        "get_condition_assessment",
         "search_manuals",
         "search_asset_work_orders",
     ]
@@ -27,6 +29,8 @@ def test_investigation_uses_expected_tools_and_ranks_bearing_issue():
     assert result["ranked_causes"][0]["cause"] == "Bearing degradation or lubrication issue"
     assert result["manual_hits"]
     assert result["work_order_hits"]
+    assert result["pump_hydraulics"]
+    assert result["condition_assessment"]
 
 
 def test_investigation_returns_grounded_answer():
