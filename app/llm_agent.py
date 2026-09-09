@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any
 
@@ -20,6 +21,9 @@ except ImportError:
         search_asset_work_orders,
         search_manuals,
     )
+
+
+logger = logging.getLogger(__name__)
 
 
 def llm_available() -> bool:
@@ -106,6 +110,27 @@ def _execute_tool(name: str, args: dict, asset_id: str) -> ToolResult:
     raise ValueError(f"Unknown maintenance tool: {name}")
 
 
+def _classify_llm_error(exc: Exception) -> tuple[str, str]:
+    """Return a safe UI category and concise detail without exposing credentials."""
+    name = exc.__class__.__name__
+    text = str(exc).lower()
+    status = getattr(exc, "status_code", None)
+
+    if status == 401 or "authentication" in text or "invalid api key" in text:
+        return "authentication", "OpenAI rejected the API credentials. Check the Render OPENAI_API_KEY value."
+    if status == 429 or "rate limit" in text or "quota" in text or "insufficient_quota" in text:
+        return "quota/rate limit", "OpenAI reported a quota or rate-limit condition. Check API billing, credits, and project limits."
+    if status == 404 or "model" in text and ("not found" in text or "does not exist" in text or "access" in text):
+        return "model access", "The configured OpenAI model may be unavailable to this API project."
+    if status in {400, 422}:
+        return "API request", "OpenAI rejected the request shape or one of the tool definitions."
+    if status and status >= 500:
+        return "OpenAI service", "OpenAI returned a server-side error. Retrying later may resolve it."
+    if "connection" in text or "timeout" in text:
+        return "network", "The app could not complete its connection to OpenAI."
+    return "unexpected error", f"OpenAI request failed ({name}). See Render logs for the full server-side exception."
+
+
 def run_llm_investigation(asset_id: str, question: str, model: str | None = None, max_rounds: int = 6):
     """Let an OpenAI model choose maintenance evidence tools, then answer from the evidence.
 
@@ -185,13 +210,25 @@ support, not an autonomous controller, and you cannot issue equipment commands."
 
 def run_copilot(asset_id: str, question: str, prefer_llm: bool = True):
     if prefer_llm and llm_available():
+        model = os.getenv("OPENAI_MODEL", "gpt-5.6-luna")
         try:
-            return run_llm_investigation(asset_id, question)
+            return run_llm_investigation(asset_id, question, model=model)
         except Exception as exc:
+            category, detail = _classify_llm_error(exc)
+            logger.exception(
+                "OpenAI investigation failed | asset_id=%s | model=%s | category=%s | exception_type=%s | error=%s",
+                asset_id,
+                model,
+                category,
+                exc.__class__.__name__,
+                str(exc),
+            )
             result = run_investigation(asset_id, question)
             result["provider"] = "Deterministic fallback"
             result["llm_used"] = False
-            result["llm_error"] = str(exc)
+            result["llm_error"] = True
+            result["llm_error_category"] = category
+            result["llm_error_detail"] = detail
             return result
 
     result = run_investigation(asset_id, question)
